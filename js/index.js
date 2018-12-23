@@ -1,6 +1,6 @@
 console.log('coucou');
 
-let renderer, scene, raycaster, mouse, clickSelectedObjects;
+let renderer, scene, raycaster, mouse, clickSelectedObjects, arrowHelper;
 
 const container = document.getElementById('scene-container');
 // Helper const wich we will use as a additional correction coefficient for objects and camera
@@ -42,6 +42,7 @@ const cube = ({ size, color, position }) => {
   return c;
 };
 
+
 class MainCharacter {
   constructor({ name, threeObj, camera }) {
     this.name = name;
@@ -58,16 +59,26 @@ class MainCharacter {
         console.log('this', this);
       },
       m: {
-        mouve: (x, y) => {
-          const { threeObj, camera: { position: cp }, behavior: { m: { currentSpeed } } } = this;
-          const { position: p } = threeObj;
+        mouve: () => {
           let { lastLookToDirection: lastL } = this.behavior.m;
+
+          const { threeObj, camera: { position: cp }, behavior: { m: { currentSpeed, mouving } } } = this;
+          const { position: p } = threeObj;
+          let x = 0;
+          let y = 0;
+          if (mouving.up) y += .1;
+          if (mouving.down) y -= .1;
+          if (mouving.right) x += .1;
+          if (mouving.left) x -= .1;
+          console.log({ x, y, mouving });
 
           const mouvementDirectionVector = new THREE.Vector3(p.x + x, p.y + y, p.z);
           const pos = new THREE.Vector3(p.x, p.y, p.z);
           // pos.addVectors(mouvementDirectionVector, threeObj.position);
 
-          if (pos.distanceTo(mouvementDirectionVector) > .02) {
+          arrowHelper.setDirection(mouvementDirectionVector);
+
+          if (pos.distanceTo(mouvementDirectionVector) > .05) {
             lastL = mouvementDirectionVector;
             threeObj.lookAt(new THREE.Vector3(lastL.x, lastL.y, lastL.z));
           }
@@ -75,96 +86,66 @@ class MainCharacter {
 
           p.set(p.x + x, p.y + y, p.z);
           cp.set(cp.x + x, cp.y + y, cp.z);
+          const { position: ap } = arrowHelper;
+          ap.set(ap.x + x, ap.y + y, ap.z);
 
-          const vector = mouvementDirectionVector.multiplyScalar(.2, .2, .2);
+          // const vector = mouvementDirectionVector.multiply(.1, .1, .1);
 
+          // p.add(vector);
           // p.set(p.x + vector.x, p.y + vector.y, p.z + vector.z);
           // cp.set(cp.x + vector.x, cp.y + vector.y, cp.z + vector.z);
-          console.log(p.x + vector.x, p.y + vector.y, p.z + vector.z);
+          // console.log(p.x + vector.x, p.y + vector.y, p.z + vector.z);
         },
-        // lookAt: () => {
-        //   const p = threeObj.position;
-
-        //   const lookDirectionVector = new THREE.Vector3(p.x + x, p.y + y, p.z);
-        //   const pos = new THREE.Vector3();
-        //   pos.addVectors(lookDirectionVector, threeObj.position);
-
-        //   threeObj.lookAt(pos);
-        // },
         speeds: {
-          nominal: 0.1,
-          sprint: 0.2,
+          nominal: 0.2,
+          sprint: 0.3,
         },
         accelerations: {
           nominal: 0.2,
           sprint: 0.3,
         },
         lastLookToDirection: { x: 0, y: 0, z: 0 },
-        speed: 0.1,
+        speed: 0.2,
         acceleration: 0.2,
-        // look: {
-        //   x: 0
-        //   y: 0
-        //   x: 0
-        // },
         currentSpeed: { x: 0, y: 0, total: 0 },
+        mouving: { up: false, down: false, right: false, left: false },
         accelerate: (axis) => {
           const { currentSpeed, speed, accelerationPerFps } = this.behavior.m;
           currentSpeed[axis] -= accelerationPerFps();
-          // console.log(this.behavior.m.currentSpeed);
           return speed;
         },
-        // decelerate: (axis) => {
-        //   const { currentSpeed, maxSpeed, deceleration } = this.behavior.m;
-        //   currentSpeed[axis] -= deceleration / (fpds * 10);
-        //   console.log(this.behavior.m.currentSpeed);
-        //   return maxSpeed;
-        // },
         accelerationPerFps: () => {
           const { acceleration } = this.behavior.m;
           return acceleration / fpds;
         },
         action: () => {
-          const { currentSpeed, mouve, accelerationPerFps } = this.behavior.m;
-          const speedX = currentSpeed.x;
-          const speedY = currentSpeed.y;
-          if (speedX >= accelerationPerFps() || speedX <= -accelerationPerFps()
-            || speedY >= accelerationPerFps() || speedY <= -accelerationPerFps()) {
-            // console.log(speedX, speedY);
-            mouve(speedX, speedY);
-            if (currentSpeed.x !== 0) currentSpeed.x += (currentSpeed.x > 0 ? -accelerationPerFps() : accelerationPerFps());
-            if (currentSpeed.y !== 0) currentSpeed.y += (currentSpeed.y > 0 ? -accelerationPerFps() : accelerationPerFps());
-          }
-
-
-          // this.behavior.m.mouve(this.behavior.m.currentSpeed);
-          // this.behavior.m.decelerate('x');
-          // this.behavior.m.decelerate('y');
+          const { mouve } = this.behavior.m;
+          mouve();
         }
       },
       mouveUp: () => {
-        const { currentSpeed, accelerationPerFps, speed } = this.behavior.m;
-        if (currentSpeed.y < speed && currentSpeed.y > -speed) {
-          currentSpeed.y += accelerationPerFps() * 2;
-        }
+        this.behavior.m.mouving.up = true;
+      },
+      stopMouveUp: () => {
+        this.behavior.m.mouving.up = false;
       },
       mouveDown: () => {
-        const { currentSpeed, accelerationPerFps, speed } = this.behavior.m;
-        if (currentSpeed.y < speed && currentSpeed.y > -speed) {
-          currentSpeed.y += -accelerationPerFps() * 2;
-        }
+        this.behavior.m.mouving.down = true;
+      },
+      stopMouveDown: () => {
+        this.behavior.m.mouving.down = false;
       },
       mouveLeft: () => {
-        const { currentSpeed, accelerationPerFps, speed } = this.behavior.m;
-        if (currentSpeed.x < speed && currentSpeed.x > -speed) {
-          currentSpeed.x += -accelerationPerFps() * 2;
-        }
+        this.behavior.m.mouving.left = true;
+      },
+      stopMouveLeft: () => {
+        this.behavior.m.mouving.left = false;
       },
       mouveRight: () => {
-        const { currentSpeed, accelerationPerFps, speed } = this.behavior.m;
-        if (currentSpeed.x < speed && currentSpeed.x > -speed) {
-          currentSpeed.x += accelerationPerFps() * 2;
-        }
+        this.behavior.m.mouving.right = true;
+      },
+      stopMouveRight: () => {
+        this.behavior.m.mouving.right = false;
       },
       sprint: () => {
         const { m } = this.behavior;
@@ -184,10 +165,10 @@ class MainCharacter {
 const perso = new MainCharacter({ name: 'bily', threeObj: cube({ size: { x: 2, y: 1, z: 1, }, position: { x: 0, y: 0, z: 0 }, color: 0xfff000 }) });
 
 const keysControls = {
-  KeyW: [{ f: perso.behavior.mouveUp, triggering: ['holddown'] }], // Z
-  KeyA: [{ f: perso.behavior.mouveLeft, triggering: ['holddown'] }], // Q
-  KeyS: [{ f: perso.behavior.mouveDown, triggering: ['holddown'] }],
-  KeyD: [{ f: perso.behavior.mouveRight, triggering: ['holddown'] }],
+  KeyW: [{ f: perso.behavior.mouveUp, triggering: ['holddown'] }, { f: perso.behavior.stopMouveUp, triggering: ['onkeyup'] }], // Z
+  KeyA: [{ f: perso.behavior.mouveLeft, triggering: ['holddown'] }, { f: perso.behavior.stopMouveLeft, triggering: ['onkeyup'] }], // Q
+  KeyS: [{ f: perso.behavior.mouveDown, triggering: ['holddown'] }, { f: perso.behavior.stopMouveDown, triggering: ['onkeyup'] }], // S
+  KeyD: [{ f: perso.behavior.mouveRight, triggering: ['holddown'] }, { f: perso.behavior.stopMouveRight, triggering: ['onkeyup'] }], // D
   KeyQ: [{ f: perso.behavior.logMySelf, triggering: ['onkeydown'] }], // A
   ShiftLeft: [{ f: perso.behavior.sprint, triggering: ['onkeydown'] }, { f: perso.behavior.unsprint, triggering: ['onkeyup'] }],
 };
@@ -293,9 +274,8 @@ function init() {
         }
       });
   };
+
   onkeyup = (e) => {
-
-
     Object.keys(keysPressed)
       .forEach((k) => {
         if (keysPressed[k] && keysControls[k]) {
@@ -316,11 +296,28 @@ function init() {
   };
 
   const sizeOne = { x: .5, y: .5, z: .5 };
-  const cubex = cube({ size: sizeOne, color: 0xff0000, position: { x: 3, y: 0, z: 0 } });
-  const cubey = cube({ size: sizeOne, color: 0x00ff00, position: { x: 0, y: 3, z: 0 } });
-  const cubez = cube({ size: sizeOne, color: 0x0000ff, position: { x: 0, y: 0, z: 3 } });
+  const cubex = cube({ size: sizeOne, color: 0xff0000, position: { x: 5, y: 0, z: 0 } });
+  const cubey = cube({ size: sizeOne, color: 0x00ff00, position: { x: 0, y: 5, z: 0 } });
+  const cubez = cube({ size: sizeOne, color: 0x0000ff, position: { x: 0, y: 0, z: 5 } });
 
   scene.add(cubex, cubey, cubez);
+
+  // ==============================================================
+  const dir = new THREE.Vector3(1, 2, 0);
+
+  // normalize the direction vector (convert to vector of length 1)
+  dir.normalize();
+
+  const origin = new THREE.Vector3(0, 0, 0);
+  const length = 2;
+  const hex = 0xfff000;
+
+  arrowHelper = new THREE.ArrowHelper(dir, origin, length, hex);
+
+  scene.add(arrowHelper);
+
+  // ==============================================================
+
 }
 
 setInterval(() => {
@@ -359,3 +356,23 @@ const render = () => {
 
 init();
 render();
+
+
+const univers = [];
+
+univers.push({ threeObj: sun });
+univers.push({ threeObj: planet });
+
+
+const animate = () => {
+
+
+  univers[0].threeObj.rotation.set(x, y, z);
+
+  univers.forEach((entity) => {
+    const { x, y, z } = entity.threeObj.rotation;
+    entity.threeObj.rotation.set(x += 0.006, y, z);
+    console.log(entity);
+  });
+
+};
